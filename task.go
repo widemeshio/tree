@@ -39,8 +39,13 @@ func (task *Task) Run(ctx context.Context) error {
 		task.doneErr = <-exit
 	}
 	close(task.doneChan)
-	logger.Debugf("done closed")
-	return nil
+	if task.doneErr != nil {
+		logger.Debugf("done closed with error, %s", task.doneErr.Error())
+	} else {
+		logger.Debugf("done closed success")
+
+	}
+	return task.doneErr
 }
 
 func (task *Task) Done() chan struct{} {
@@ -61,7 +66,7 @@ func (task *Task) startSub(ctx context.Context, sub *Task) {
 	go sub.Run(ctx)
 }
 
-func (task *Task) waitSubError(ctx context.Context) error {
+func (task *Task) waitSubExit(ctx context.Context) error {
 	task.subsMutex.Lock()
 	defer task.subsMutex.Unlock()
 	if len(task.subs) == 0 {

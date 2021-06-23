@@ -1,6 +1,10 @@
 package main
 
-import "context"
+import (
+	"context"
+	"fmt"
+	"time"
+)
 
 func main() {
 	logger := NewDevelopmentLogger()
@@ -10,7 +14,7 @@ func main() {
 		work.StartSub("generator", &generator{numbers})
 		work.StartSub("printer", &printer{numbers})
 
-		return work.WaitSubError()
+		return work.WaitSubExit()
 	}
 	program.Run()
 }
@@ -24,8 +28,12 @@ func (gen *generator) Work(ctx context.Context, work *Work) error {
 	for {
 		i++
 		work.Debugf("generating number %v", i)
+		if i == 10 {
+			return fmt.Errorf("generator crash at 10")
+		}
 		gen.numbers <- i
 		work.Debugf("generated number %v", i)
+		time.Sleep(time.Second)
 	}
 }
 
