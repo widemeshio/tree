@@ -42,8 +42,14 @@ type printer struct {
 }
 
 func (pri *printer) Work(ctx context.Context, work *Work) error {
-	for i := range pri.numbers {
-		work.Debugf("printing number %v", i)
+	done := ctx.Done()
+
+	for {
+		select {
+		case i := <-pri.numbers:
+			work.Debugf("printing number %v", i)
+		case <-done:
+			work.Debugf("printing done")
+		}
 	}
-	return nil
 }

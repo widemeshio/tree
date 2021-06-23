@@ -31,6 +31,7 @@ func (task *Task) Run(ctx context.Context) error {
 		exit := make(chan error)
 		go func() {
 			work := &Work{
+				ctx:    ctx,
 				owner:  task,
 				Logger: logger,
 			}
