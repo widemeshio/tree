@@ -8,6 +8,7 @@ import (
 type Task struct {
 	name      string
 	logger    Logger
+	isDone    bool
 	doneChan  chan struct{}
 	doneErr   error
 	Work      func(ctx context.Context, work *Work) error
@@ -22,31 +23,54 @@ func NewTask(name string, logger Logger) *Task {
 		doneChan: make(chan struct{}),
 	}
 }
+func (task *Task) work(ctx context.Context) {
+	logger := task.logger
+	handler := task.Work
+	if handler == nil {
+		return
+	}
+	exit := make(chan error)
+	go func() {
+		work := &Work{
+			ctx:    ctx,
+			owner:  task,
+			Logger: logger,
+		}
+		exit <- handler(ctx, work)
+	}()
+	task.doneErr = <-exit
+}
 
 func (task *Task) Run(ctx context.Context) error {
 	logger := task.logger
 	logger.Debugf("running")
-	logger.Debugf("done closing")
-	if handler := task.Work; handler != nil {
-		exit := make(chan error)
-		go func() {
-			work := &Work{
-				ctx:    ctx,
-				owner:  task,
-				Logger: logger,
-			}
-			exit <- handler(ctx, work)
-		}()
-		task.doneErr = <-exit
+	ctx, cancel := context.WithCancel(ctx)
+	watchCancel := func() {
+		logger.Debugf("watching cancel")
+		<-task.doneChan
+		logger.Debugf("cancelling")
+		cancel()
+		logger.Debugf("cancelled")
 	}
-	close(task.doneChan)
+	go watchCancel()
+
+	task.work(ctx)
+	task.Terminate()
+
 	if task.doneErr != nil {
 		logger.Debugf("done closed with error, %s", task.doneErr.Error())
 	} else {
 		logger.Debugf("done closed success")
-
 	}
 	return task.doneErr
+}
+
+func (task *Task) Terminate() {
+	logger := task.logger
+	logger.Debugf("done closing")
+	task.isDone = true
+	close(task.doneChan)
+	logger.Debugf("done closed")
 }
 
 func (task *Task) Done() chan struct{} {
@@ -67,13 +91,20 @@ func (task *Task) startSub(ctx context.Context, sub *Task) {
 	go sub.Run(ctx)
 }
 
-func (task *Task) waitSubExit(ctx context.Context) error {
+func (task *Task) awaitAnySub(ctx context.Context) (*Task, error) {
 	task.subsMutex.Lock()
 	defer task.subsMutex.Unlock()
-	if len(task.subs) == 0 {
-		return nil
+	subs := task.subs
+	if len(subs) == 0 {
+		return nil, nil
 	}
-	sub := task.subs[0]
-	<-sub.Done()
-	return sub.Err()
+	completed := make(chan *Task, len(subs))
+	for _, sub := range task.subs {
+		go func(sub *Task) {
+			<-sub.Done()
+			completed <- sub
+		}(sub)
+	}
+	completeSub := <-completed
+	return completeSub, completeSub.Err()
 }

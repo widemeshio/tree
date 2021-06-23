@@ -16,8 +16,8 @@ func (w *Work) StartSub(name string, handler TaskHandler) *Task {
 	return newTask
 }
 
-func (w *Work) WaitSubExit() error {
-	return w.owner.waitSubExit(w.ctx)
+func (w *Work) AwaitAnySub() (*Task, error) {
+	return w.owner.awaitAnySub(w.ctx)
 }
 
 type TaskHandler interface {
