@@ -1,4 +1,4 @@
-package main
+package tree
 
 import "context"
 
@@ -18,6 +18,10 @@ func (w *Work) StartSub(name string, handler TaskHandler) *Task {
 
 func (w *Work) AwaitAnySub() (*Task, error) {
 	return w.owner.awaitAnySub(w.ctx)
+}
+
+func (w *Work) Terminate() {
+	w.owner.Terminate()
 }
 
 type TaskHandler interface {

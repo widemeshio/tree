@@ -1,4 +1,4 @@
-package main
+package tree
 
 import (
 	"context"
@@ -72,7 +72,7 @@ func TestCascadeCancel(t *testing.T) {
 		generatorTask = work.StartSub("generatorAnySub", generator)
 		printerTask = work.StartSub("printAnySub", printer)
 
-		work.Debugf("waiting before cancel")
+		work.Debugf("waiting before completing")
 		time.Sleep(time.Second)
 		work.Debugf("completing")
 		return nil
@@ -82,6 +82,45 @@ func TestCascadeCancel(t *testing.T) {
 	require.Nil(t, err, "no error should be returned")
 	<-printerTask.Done()
 	require.Equal(t, trueInt32, printer.cancelled, "printer should be cancelled eventually")
+	<-generatorTask.Done()
+	require.Equal(t, trueInt32, generator.cancelled, "generator should have been cancelled")
+	require.Equal(t, falseInt32, generator.completed, "generator should have not completed normally")
+}
+
+func TestTerminateContextDone(t *testing.T) {
+	logger := NewDevelopmentLogger()
+	program := NewTask("terminate-context-done", logger)
+	numbers := make(chan int)
+	generator := newGeneratorOk(numbers)
+	printer := newPrinterAnySub(numbers)
+	var printerTask, generatorTask *Task
+	cancelSuccessErr := fmt.Errorf("cancel err")
+	program.Work = func(ctx context.Context, work *Work) error {
+		generatorTask = work.StartSub("generator", generator)
+		printerTask = work.StartSub("print", printer)
+
+		work.Debugf("waiting before completing")
+		tick := time.NewTimer(20 * time.Second)
+		select {
+		case <-ctx.Done():
+			return cancelSuccessErr
+		case <-tick.C:
+			work.Debugf("timeout was completed without ctx done, this should not happen")
+			break
+		}
+		return nil
+	}
+	ctx := context.Background()
+	go func() {
+		time.Sleep(time.Second)
+		program.Terminate()
+	}()
+	err := program.Run(ctx)
+	require.Equal(t, cancelSuccessErr, err, "task should have been cancelled and specific error returned")
+	logger.Debugf("waiting for printer to complete")
+	<-printerTask.Done()
+	require.Equal(t, trueInt32, printer.cancelled, "printer should be cancelled eventually")
+	logger.Debugf("waiting for generator")
 	<-generatorTask.Done()
 	require.Equal(t, trueInt32, generator.cancelled, "generator should have been cancelled")
 	require.Equal(t, falseInt32, generator.completed, "generator should have not completed normally")

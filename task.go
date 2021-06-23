@@ -1,4 +1,4 @@
-package main
+package tree
 
 import (
 	"context"
@@ -6,14 +6,15 @@ import (
 )
 
 type Task struct {
-	name      string
-	logger    Logger
-	isDone    bool
-	doneChan  chan struct{}
-	doneErr   error
-	Work      func(ctx context.Context, work *Work) error
-	subs      []*Task
-	subsMutex sync.Mutex
+	name          string
+	logger        Logger
+	isDone        bool
+	doneChan      chan struct{}
+	doneChanMutex sync.Mutex
+	doneErr       error
+	Work          func(ctx context.Context, work *Work) error
+	subs          []*Task
+	subsMutex     sync.Mutex
 }
 
 func NewTask(name string, logger Logger) *Task {
@@ -56,21 +57,29 @@ func (task *Task) Run(ctx context.Context) error {
 
 	task.work(ctx)
 	task.Terminate()
+	task.terminateChildren(ctx)
 
-	if task.doneErr != nil {
-		logger.Debugf("done closed with error, %s", task.doneErr.Error())
+	err := task.doneErr
+	if err != nil {
+		logger.Debugf("done closed with error, %s", err.Error())
 	} else {
 		logger.Debugf("done closed success")
 	}
-	return task.doneErr
+	return err
 }
 
 func (task *Task) Terminate() {
 	logger := task.logger
-	logger.Debugf("done closing")
+	task.doneChanMutex.Lock()
+	defer task.doneChanMutex.Unlock()
+	if task.isDone {
+		logger.Debugf("already terminated")
+		return
+	}
+	logger.Debugf("terminate closing")
 	task.isDone = true
 	close(task.doneChan)
-	logger.Debugf("done closed")
+	logger.Debugf("terminate closed")
 }
 
 func (task *Task) Done() chan struct{} {
@@ -99,7 +108,7 @@ func (task *Task) awaitAnySub(ctx context.Context) (*Task, error) {
 		return nil, nil
 	}
 	completed := make(chan *Task, len(subs))
-	for _, sub := range task.subs {
+	for _, sub := range subs {
 		go func(sub *Task) {
 			<-sub.Done()
 			completed <- sub
@@ -107,4 +116,16 @@ func (task *Task) awaitAnySub(ctx context.Context) (*Task, error) {
 	}
 	completeSub := <-completed
 	return completeSub, completeSub.Err()
+}
+
+func (task *Task) terminateChildren(ctx context.Context) {
+	logger := task.logger
+	logger.Debugf("terminating children")
+	task.subsMutex.Lock()
+	defer task.subsMutex.Unlock()
+	subs := task.subs
+	for _, sub := range subs {
+		logger.Debugf("terminating %s", sub.Name())
+		sub.Terminate()
+	}
 }
