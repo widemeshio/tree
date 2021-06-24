@@ -90,7 +90,7 @@ func TestCascadeCancel(t *testing.T) {
 func TestTerminateContextDone(t *testing.T) {
 	logger := NewDevelopmentLogger()
 	program := NewTask("terminate-context-done", logger)
-	numbers := make(chan int)
+	numbers := make(chan int, 1000) // avoid deadlocks in this specific test
 	generator := newGeneratorOk(numbers)
 	printer := newPrinterAnySub(numbers)
 	var printerTask, generatorTask *Task
@@ -123,6 +123,34 @@ func TestTerminateContextDone(t *testing.T) {
 	logger.Debugf("waiting for generator")
 	<-generatorTask.Terminated()
 	require.Equal(t, trueInt32, generator.cancelled, "generator should have been cancelled")
+	require.Equal(t, falseInt32, generator.completed, "generator should have not completed normally")
+}
+
+func TestTerminateDeadline(t *testing.T) {
+	logger := NewDevelopmentLogger()
+	program := NewTask("terminate-context-done", logger)
+	program.TerminationDeadline = 7 * time.Second
+	numbers := make(chan int)
+	generator := newGeneratorOk(numbers)
+	var generatorTask *Task
+	program.Work = func(ctx context.Context, work *Work) error {
+		generatorTask = work.Spawn("generator", generator)
+		generatorTask.TerminationDeadline = 3 * time.Second
+		<-generatorTask.Terminated()
+		return generatorTask.Err()
+	}
+	ctx := context.Background()
+	go func() {
+		time.Sleep(time.Second)
+		program.Terminate()
+	}()
+	err := program.Run(ctx)
+	var target *ErrTerminationDeadlineExceeded
+	require.ErrorAs(t, err, &target)
+	require.ErrorAs(t, program.Err(), &target)
+	logger.Debugf("waiting for generator")
+	<-generatorTask.Terminated()
+	require.Equal(t, falseInt32, generator.cancelled, "generator goroutine never had the chance to execute ctx done")
 	require.Equal(t, falseInt32, generator.completed, "generator should have not completed normally")
 }
 

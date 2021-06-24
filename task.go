@@ -3,7 +3,11 @@ package tree
 import (
 	"context"
 	"sync"
+	"time"
 )
+
+// DefaultTerminationDeadline default termination deadline for all tasks
+const DefaultTerminationDeadline = 5 * time.Second
 
 type Task struct {
 	name                       string
@@ -16,6 +20,7 @@ type Task struct {
 	Work                       func(ctx context.Context, work *Work) error
 	subs                       []*Task
 	subsMutex                  sync.Mutex
+	TerminationDeadline        time.Duration
 }
 
 func NewTask(name string, logger Logger) *Task {
@@ -24,16 +29,17 @@ func NewTask(name string, logger Logger) *Task {
 		logger:                logger.Named(name),
 		terminationSignalChan: make(chan struct{}),
 		terminatedChan:        make(chan struct{}),
+		TerminationDeadline:   DefaultTerminationDeadline,
 	}
 }
 
-func (task *Task) work(ctx context.Context) {
+func (task *Task) work(ctx context.Context, cancelDeadlineStartSignal <-chan struct{}) {
 	logger := task.logger
 	handler := task.Work
 	if handler == nil {
 		return
 	}
-	exit := make(chan error)
+	exit := make(chan error, 2)
 	go func() {
 		work := &Work{
 			ctx:    ctx,
@@ -42,12 +48,23 @@ func (task *Task) work(ctx context.Context) {
 		}
 		exit <- handler(ctx, work)
 	}()
+	terminationDeadline := task.TerminationDeadline
+	go func() {
+		<-cancelDeadlineStartSignal
+		time.Sleep(terminationDeadline)
+		exit <- &ErrTerminationDeadlineExceeded{
+			TaskName: task.Name(),
+			Timeout:  terminationDeadline,
+			Message:  "termination deadline exceeded",
+		}
+	}()
 	task.workErr = <-exit
 }
 
 func (task *Task) Run(ctx context.Context) error {
 	logger := task.logger
 	logger.Debugf("running")
+	cancelDeadlineStartSignal := make(chan struct{}, 1)
 	ctx, cancel := context.WithCancel(ctx)
 	watchCancel := func() {
 		logger.Debugf("watching cancel")
@@ -55,11 +72,12 @@ func (task *Task) Run(ctx context.Context) error {
 		logger.Debugf("cancelling")
 		cancel()
 		logger.Debugf("cancelled")
+		cancelDeadlineStartSignal <- struct{}{}
 	}
 	go watchCancel()
 
 	logger.Debugf("work starting")
-	task.work(ctx)
+	task.work(ctx, cancelDeadlineStartSignal)
 	logger.Debugf("work completed, now requesting termination")
 	task.Terminate()
 	task.terminateChildren(ctx)
