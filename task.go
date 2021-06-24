@@ -6,24 +6,24 @@ import (
 )
 
 type Task struct {
-	name                      string
-	logger                    Logger
-	isTerminated              bool
-	terminateRequestChan      chan struct{}
-	terminateRequestChanMutex sync.Mutex
-	terminatedChan            chan struct{}
-	workErr                   error
-	Work                      func(ctx context.Context, work *Work) error
-	subs                      []*Task
-	subsMutex                 sync.Mutex
+	name                       string
+	logger                     Logger
+	isTerminated               bool
+	terminationSignalChan      chan struct{}
+	terminationSignalChanMutex sync.Mutex
+	terminatedChan             chan struct{}
+	workErr                    error
+	Work                       func(ctx context.Context, work *Work) error
+	subs                       []*Task
+	subsMutex                  sync.Mutex
 }
 
 func NewTask(name string, logger Logger) *Task {
 	return &Task{
-		name:                 name,
-		logger:               logger.Named(name),
-		terminateRequestChan: make(chan struct{}),
-		terminatedChan:       make(chan struct{}),
+		name:                  name,
+		logger:                logger.Named(name),
+		terminationSignalChan: make(chan struct{}),
+		terminatedChan:        make(chan struct{}),
 	}
 }
 func (task *Task) work(ctx context.Context) {
@@ -50,7 +50,7 @@ func (task *Task) Run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	watchCancel := func() {
 		logger.Debugf("watching cancel")
-		<-task.terminateRequestChan
+		<-task.terminationSignalChan
 		logger.Debugf("cancelling")
 		cancel()
 		logger.Debugf("cancelled")
@@ -74,26 +74,30 @@ func (task *Task) Run(ctx context.Context) error {
 // Terminate requests termination of the task. Safe to be called from any goroutine.
 func (task *Task) Terminate() {
 	logger := task.logger
-	task.terminateRequestChanMutex.Lock()
-	defer task.terminateRequestChanMutex.Unlock()
+	task.terminationSignalChanMutex.Lock()
+	defer task.terminationSignalChanMutex.Unlock()
 	if task.isTerminated {
 		logger.Debugf("already terminated")
 		return
 	}
 	logger.Debugf("terminate closing")
 	task.isTerminated = true
-	close(task.terminateRequestChan)
+	close(task.terminationSignalChan)
 	logger.Debugf("terminate closed")
 }
 
-// Terminated returns a chan you can watch when the task has been terminated, meaning the task has completed the full run cycle
+// Terminated returns a chan you can watch when the task has been terminated, meaning the task has completed the full run cycle.
+// Child tasks have been given a chance to terminate at this point via context cancellation.
 func (task *Task) Terminated() chan struct{} {
 	return task.terminatedChan
 }
+
+// Err returns the execution error of the task.
 func (task *Task) Err() error {
 	return task.workErr
 }
 
+// Name returns the name of the task
 func (task *Task) Name() string {
 	return task.name
 }
@@ -101,6 +105,9 @@ func (task *Task) Name() string {
 func (task *Task) startSub(ctx context.Context, sub *Task) {
 	task.subsMutex.Lock()
 	defer task.subsMutex.Unlock()
+	if task.isTerminated {
+		panic("unable to start spawn when task already completed")
+	}
 	task.subs = append(task.subs, sub)
 	go sub.Run(ctx)
 }
