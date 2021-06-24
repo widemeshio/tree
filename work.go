@@ -8,8 +8,8 @@ type Work struct {
 	Logger
 }
 
-// StartSub registers a child task with the given name and handler
-func (w *Work) StartSub(name string, handler TaskHandler) *Task {
+// Spawn returns a child task running with the given name and handler.
+func (w *Work) Spawn(name string, handler TaskHandler) *Task {
 	newTask := NewTask(name, w.owner.logger)
 	newTask.Work = handler.Work
 	w.owner.startSub(w.ctx, newTask)
@@ -21,8 +21,8 @@ func (w *Work) AwaitAnySub() (*Task, error) {
 	return w.owner.awaitAnySub(w.ctx)
 }
 
-// TerminateEarly requests early termination of the current work.
-// This causes the context of the work to cancelled.
+// TerminateEarly requests early termination of the current work causing the context of the current work to cancelled.
+// Regularly to terminate the current work early, just use a regular go return from the work handler.
 func (w *Work) TerminateEarly() {
 	w.owner.Terminate()
 }

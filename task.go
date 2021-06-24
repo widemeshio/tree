@@ -26,6 +26,7 @@ func NewTask(name string, logger Logger) *Task {
 		terminatedChan:        make(chan struct{}),
 	}
 }
+
 func (task *Task) work(ctx context.Context) {
 	logger := task.logger
 	handler := task.Work
@@ -57,10 +58,13 @@ func (task *Task) Run(ctx context.Context) error {
 	}
 	go watchCancel()
 
+	logger.Debugf("work starting")
 	task.work(ctx)
+	logger.Debugf("work completed, now requesting termination")
 	task.Terminate()
 	task.terminateChildren(ctx)
 
+	logger.Debugf("children termination complete")
 	err := task.workErr
 	if err != nil {
 		logger.Debugf("done closed with error, %s", err.Error())

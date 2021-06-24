@@ -18,8 +18,8 @@ func TestAwaitAnySubWithError(t *testing.T) {
 	printer := newPrinterAnySub(numbers)
 	var printerTask *Task
 	program.Work = func(ctx context.Context, work *Work) error {
-		work.StartSub("generatorAnySub", generator)
-		printerTask = work.StartSub("printAnySub", printer)
+		work.Spawn("generatorAnySub", generator)
+		printerTask = work.Spawn("printAnySub", printer)
 
 		_, err := work.AwaitAnySub()
 		if err != nil {
@@ -42,8 +42,8 @@ func TestAwaitAnySubSuccess(t *testing.T) {
 	printer := newPrinterAnySub(numbers)
 	var printerTask, generatorTask *Task
 	program.Work = func(ctx context.Context, work *Work) error {
-		generatorTask = work.StartSub("generatorAnySub", generator)
-		printerTask = work.StartSub("printAnySub", printer)
+		generatorTask = work.Spawn("generatorAnySub", generator)
+		printerTask = work.Spawn("printAnySub", printer)
 
 		_, err := work.AwaitAnySub()
 		if err != nil {
@@ -69,8 +69,8 @@ func TestCascadeCancel(t *testing.T) {
 	printer := newPrinterAnySub(numbers)
 	var printerTask, generatorTask *Task
 	program.Work = func(ctx context.Context, work *Work) error {
-		generatorTask = work.StartSub("generatorAnySub", generator)
-		printerTask = work.StartSub("printAnySub", printer)
+		generatorTask = work.Spawn("generatorAnySub", generator)
+		printerTask = work.Spawn("printAnySub", printer)
 
 		work.Debugf("waiting before completing")
 		time.Sleep(time.Second)
@@ -96,8 +96,8 @@ func TestTerminateContextDone(t *testing.T) {
 	var printerTask, generatorTask *Task
 	cancelSuccessErr := fmt.Errorf("cancel err")
 	program.Work = func(ctx context.Context, work *Work) error {
-		generatorTask = work.StartSub("generator", generator)
-		printerTask = work.StartSub("print", printer)
+		generatorTask = work.Spawn("generator", generator)
+		printerTask = work.Spawn("print", printer)
 
 		work.Debugf("waiting before completing")
 		tick := time.NewTimer(20 * time.Second)
@@ -171,6 +171,7 @@ func newGeneratorOk(
 func (gen *generatorOk) Work(ctx context.Context, work *Work) error {
 	i := 0
 	timer := time.NewTicker(time.Second)
+	defer timer.Stop()
 	working := true
 	for working {
 		select {
