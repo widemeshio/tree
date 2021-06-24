@@ -30,7 +30,7 @@ func TestAwaitAnySubWithError(t *testing.T) {
 	ctx := context.Background()
 	err := program.Run(ctx)
 	require.Equal(t, errGeneratorCrash, err)
-	<-printerTask.Done()
+	<-printerTask.Terminated()
 	require.Equal(t, trueInt32, printer.cancelled, "printer should be cancelled eventually")
 }
 
@@ -54,9 +54,9 @@ func TestAwaitAnySubSuccess(t *testing.T) {
 	ctx := context.Background()
 	err := program.Run(ctx)
 	require.Nil(t, err, "no error should be returned")
-	<-printerTask.Done()
+	<-printerTask.Terminated()
 	require.Equal(t, trueInt32, printer.cancelled, "printer should be cancelled eventually")
-	<-generatorTask.Done()
+	<-generatorTask.Terminated()
 	require.Equal(t, falseInt32, generator.cancelled, "generator should not be cancelled, it should have completed normally")
 	require.Equal(t, trueInt32, generator.completed, "generator should be done normally")
 }
@@ -80,9 +80,9 @@ func TestCascadeCancel(t *testing.T) {
 	ctx := context.Background()
 	err := program.Run(ctx)
 	require.Nil(t, err, "no error should be returned")
-	<-printerTask.Done()
+	<-printerTask.Terminated()
 	require.Equal(t, trueInt32, printer.cancelled, "printer should be cancelled eventually")
-	<-generatorTask.Done()
+	<-generatorTask.Terminated()
 	require.Equal(t, trueInt32, generator.cancelled, "generator should have been cancelled")
 	require.Equal(t, falseInt32, generator.completed, "generator should have not completed normally")
 }
@@ -118,10 +118,10 @@ func TestTerminateContextDone(t *testing.T) {
 	err := program.Run(ctx)
 	require.Equal(t, cancelSuccessErr, err, "task should have been cancelled and specific error returned")
 	logger.Debugf("waiting for printer to complete")
-	<-printerTask.Done()
+	<-printerTask.Terminated()
 	require.Equal(t, trueInt32, printer.cancelled, "printer should be cancelled eventually")
 	logger.Debugf("waiting for generator")
-	<-generatorTask.Done()
+	<-generatorTask.Terminated()
 	require.Equal(t, trueInt32, generator.cancelled, "generator should have been cancelled")
 	require.Equal(t, falseInt32, generator.completed, "generator should have not completed normally")
 }
@@ -206,14 +206,13 @@ func newPrinterAnySub(numbers chan int) *printAnySub {
 }
 
 func (pri *printAnySub) Work(ctx context.Context, work *Work) error {
-	done := ctx.Done()
 
 	for {
 		select {
 		case i := <-pri.numbers:
 			work.Debugf("printing number %v", i)
-		case <-done:
-			work.Debugf("printing done")
+		case <-ctx.Done():
+			work.Debugf("printing cancelled")
 			atomic.StoreInt32(&pri.cancelled, trueInt32)
 			return nil
 		}
