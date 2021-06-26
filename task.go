@@ -110,7 +110,7 @@ func (task *Task) Terminate() {
 
 // Terminated returns a chan you can watch when the task has been terminated, meaning the task has completed the full run cycle.
 // Child tasks have been given a chance to terminate at this point via context cancellation.
-func (task *Task) Terminated() chan struct{} {
+func (task *Task) Terminated() <-chan struct{} {
 	return task.terminatedChan
 }
 

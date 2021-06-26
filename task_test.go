@@ -65,7 +65,7 @@ func TestCascadeCancel(t *testing.T) {
 	logger := NewDevelopmentLogger()
 	program := NewTask("cascade cancel", logger)
 	program.TerminationDeadline = 15 * time.Second
-	numbers := make(chan int)
+	numbers := make(chan int, 1000) // avoid deadlocks in this specific test
 	generator := newGeneratorOk(numbers)
 	printer := newPrinterAnySub(numbers)
 	var printerTask, generatorTask *Task
