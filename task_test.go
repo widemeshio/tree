@@ -3,6 +3,7 @@ package tree
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -17,16 +18,16 @@ func TestWaitChildWithError(t *testing.T) {
 	generator := newGeneratorCrashing(numbers)
 	printer := newPrinterAnySub(numbers)
 	var printerTask *Task
-	program.Work = func(ctx context.Context, work *Work) error {
-		work.Spawn("generatorAnySub", generator)
-		printerTask = work.Spawn("printAnySub", printer)
+	program.Work = WorkHandlerFunc(func(ctx context.Context, work *Work) error {
+		work.Spawn("generatorAnySub", newTestWorkHandler(generator))
+		printerTask = work.Spawn("printAnySub", newTestWorkHandler(printer))
 
 		_, err := work.WaitChild()
 		if err != nil {
 			return err
 		}
 		return nil
-	}
+	})
 	ctx := context.Background()
 	err := program.Run(ctx)
 	require.Equal(t, errGeneratorCrash, err)
@@ -41,16 +42,16 @@ func TestWaitChildSuccess(t *testing.T) {
 	generator := newGeneratorOk(numbers)
 	printer := newPrinterAnySub(numbers)
 	var printerTask, generatorTask *Task
-	program.Work = func(ctx context.Context, work *Work) error {
-		generatorTask = work.Spawn("generatorAnySub", generator)
-		printerTask = work.Spawn("printAnySub", printer)
+	program.Work = WorkHandlerFunc(func(ctx context.Context, work *Work) error {
+		generatorTask = work.Spawn("generatorAnySub", newTestWorkHandler(generator))
+		printerTask = work.Spawn("printAnySub", newTestWorkHandler(printer))
 
 		_, err := work.WaitChild()
 		if err != nil {
 			return err
 		}
 		return nil
-	}
+	})
 	ctx := context.Background()
 	err := program.Run(ctx)
 	require.Nil(t, err, "no error should be returned")
@@ -69,17 +70,17 @@ func TestCascadeCancel(t *testing.T) {
 	generator := newGeneratorOk(numbers)
 	printer := newPrinterAnySub(numbers)
 	var printerTask, generatorTask *Task
-	program.Work = func(ctx context.Context, work *Work) error {
-		generatorTask = work.Spawn("generatorAnySub", generator)
+	program.Work = WorkHandlerFunc(newTestWork(func(ctx context.Context, work *testWork) error {
+		generatorTask = work.Spawn("generatorAnySub", newTestWorkHandler(generator))
 		generatorTask.TerminationDeadline = 5 * time.Second
-		printerTask = work.Spawn("printAnySub", printer)
+		printerTask = work.Spawn("printAnySub", newTestWorkHandler(printer))
 		printerTask.TerminationDeadline = 5 * time.Second
 
 		work.Debugf("waiting before completing")
 		time.Sleep(time.Second)
 		work.Debugf("completing")
 		return nil
-	}
+	}))
 	ctx := context.Background()
 	err := program.Run(ctx)
 	require.Nil(t, err, "no error should be returned")
@@ -98,9 +99,9 @@ func TestTerminateContextDone(t *testing.T) {
 	printer := newPrinterAnySub(numbers)
 	var printerTask, generatorTask *Task
 	cancelSuccessErr := fmt.Errorf("cancel err")
-	program.Work = func(ctx context.Context, work *Work) error {
-		generatorTask = work.Spawn("generator", generator)
-		printerTask = work.Spawn("print", printer)
+	program.Work = WorkHandlerFunc(newTestWork(func(ctx context.Context, work *testWork) error {
+		generatorTask = work.Spawn("generator", newTestWorkHandler(generator))
+		printerTask = work.Spawn("print", newTestWorkHandler(printer))
 
 		work.Debugf("waiting before completing")
 		tick := time.NewTimer(20 * time.Second)
@@ -112,7 +113,7 @@ func TestTerminateContextDone(t *testing.T) {
 			break
 		}
 		return nil
-	}
+	}))
 	ctx := context.Background()
 	go func() {
 		time.Sleep(time.Second)
@@ -136,12 +137,12 @@ func TestTerminateDeadline(t *testing.T) {
 	numbers := make(chan int)
 	generator := newGeneratorOk(numbers)
 	var generatorTask *Task
-	program.Work = func(ctx context.Context, work *Work) error {
-		generatorTask = work.Spawn("generator", generator)
+	program.Work = WorkHandlerFunc(func(ctx context.Context, work *Work) error {
+		generatorTask = work.Spawn("generator", newTestWorkHandler(generator))
 		generatorTask.TerminationDeadline = 3 * time.Second
 		<-generatorTask.Terminated()
 		return generatorTask.Err()
-	}
+	})
 	ctx := context.Background()
 	go func() {
 		time.Sleep(time.Second)
@@ -161,13 +162,13 @@ func TestWaitChildNoChildren(t *testing.T) {
 	logger := NewDevelopmentLogger()
 	program := NewTask("wait-no-children", logger)
 	program.TerminationDeadline = 7 * time.Second
-	program.Work = func(ctx context.Context, work *Work) error {
+	program.Work = WorkHandlerFunc(func(ctx context.Context, work *Work) error {
 		_, err := work.WaitChild()
 		if err != nil {
 			return err
 		}
 		return nil
-	}
+	})
 	ctx := context.Background()
 	err := program.Run(ctx)
 	require.Nil(t, err)
@@ -185,7 +186,7 @@ func newGeneratorCrashing(
 	}
 }
 
-func (gen *generatorCrashing) Work(ctx context.Context, work *Work) error {
+func (gen *generatorCrashing) Work(ctx context.Context, work *testWork) error {
 	i := 0
 	for {
 		i++
@@ -215,7 +216,7 @@ func newGeneratorOk(
 	}
 }
 
-func (gen *generatorOk) Work(ctx context.Context, work *Work) error {
+func (gen *generatorOk) Work(ctx context.Context, work *testWork) error {
 	i := 0
 	timer := time.NewTicker(time.Second)
 	defer timer.Stop()
@@ -253,7 +254,7 @@ func newPrinterAnySub(numbers chan int) *printAnySub {
 	}
 }
 
-func (pri *printAnySub) Work(ctx context.Context, work *Work) error {
+func (pri *printAnySub) Work(ctx context.Context, work *testWork) error {
 
 	for {
 		select {
@@ -269,3 +270,51 @@ func (pri *printAnySub) Work(ctx context.Context, work *Work) error {
 
 var trueInt32 = int32(1)
 var falseInt32 = int32(0)
+
+type Program struct {
+	*Task
+}
+
+func NewProgram(name string, logger Logger) *Program {
+	return &Program{
+		Task: NewTask(name, logger),
+	}
+}
+
+func (mainTask *Program) Run() {
+	ctx := context.Background()
+	err := mainTask.Task.Run(ctx)
+	if err != nil {
+		log.Fatalf("main task failed, %s", err.Error())
+	}
+}
+
+type testWork struct {
+	*Work
+	Logger
+}
+
+func newTestWork(original func(ctx context.Context, work *testWork) error) func(ctx context.Context, work *Work) error {
+	return func(ctx context.Context, work *Work) error {
+		return original(ctx, &testWork{
+			Work:   work,
+			Logger: work.Task().Logger(),
+		})
+	}
+}
+
+func newTestWorkHandler(handler interface {
+	Work(ctx context.Context, work *testWork) error
+}) WorkHandler {
+	return &testWorkHandler{
+		work: newTestWork(handler.Work),
+	}
+}
+
+type testWorkHandler struct {
+	work func(ctx context.Context, work *Work) error
+}
+
+func (w *testWorkHandler) Work(ctx context.Context, work *Work) error {
+	return w.work(ctx, work)
+}

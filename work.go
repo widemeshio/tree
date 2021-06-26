@@ -5,13 +5,12 @@ import "context"
 type Work struct {
 	ctx   context.Context
 	owner *Task
-	Logger
 }
 
 // Spawn returns a child task running with the given name and handler.
-func (w *Work) Spawn(name string, handler TaskHandler) *Task {
+func (w *Work) Spawn(name string, handler WorkHandler) *Task {
 	newTask := NewTask(name, w.owner.logger)
-	newTask.Work = handler.Work
+	newTask.Work = handler
 	w.owner.startSub(w.ctx, newTask)
 	return newTask
 }
@@ -27,6 +26,7 @@ func (w *Work) TerminateEarly() {
 	w.owner.Terminate()
 }
 
-type TaskHandler interface {
-	Work(ctx context.Context, work *Work) error
+// Task returns the task executing the work
+func (w *Work) Task() *Task {
+	return w.owner
 }
