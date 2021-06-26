@@ -16,8 +16,8 @@ func (w *Work) Spawn(name string, handler TaskHandler) *Task {
 	return newTask
 }
 
-// AwaitAnySub blocks until any child terminates
-func (w *Work) AwaitAnySub() (*Task, error) {
+// WaitChild blocks until a child terminates
+func (w *Work) WaitChild() (*Task, error) {
 	return w.owner.awaitAnySub(w.ctx)
 }
 

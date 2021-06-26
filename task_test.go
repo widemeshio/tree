@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAwaitAnySubWithError(t *testing.T) {
+func TestWaitChildWithError(t *testing.T) {
 	logger := NewDevelopmentLogger()
 	program := NewTask("any with sub error", logger)
 	numbers := make(chan int)
@@ -21,7 +21,7 @@ func TestAwaitAnySubWithError(t *testing.T) {
 		work.Spawn("generatorAnySub", generator)
 		printerTask = work.Spawn("printAnySub", printer)
 
-		_, err := work.AwaitAnySub()
+		_, err := work.WaitChild()
 		if err != nil {
 			return err
 		}
@@ -34,7 +34,7 @@ func TestAwaitAnySubWithError(t *testing.T) {
 	require.Equal(t, trueInt32, printer.cancelled, "printer should be cancelled eventually")
 }
 
-func TestAwaitAnySubSuccess(t *testing.T) {
+func TestWaitChildSuccess(t *testing.T) {
 	logger := NewDevelopmentLogger()
 	program := NewTask("any-sub-success", logger)
 	numbers := make(chan int)
@@ -45,7 +45,7 @@ func TestAwaitAnySubSuccess(t *testing.T) {
 		generatorTask = work.Spawn("generatorAnySub", generator)
 		printerTask = work.Spawn("printAnySub", printer)
 
-		_, err := work.AwaitAnySub()
+		_, err := work.WaitChild()
 		if err != nil {
 			return err
 		}
