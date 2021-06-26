@@ -64,13 +64,16 @@ func TestAwaitAnySubSuccess(t *testing.T) {
 func TestCascadeCancel(t *testing.T) {
 	logger := NewDevelopmentLogger()
 	program := NewTask("cascade cancel", logger)
+	program.TerminationDeadline = 15 * time.Second
 	numbers := make(chan int)
 	generator := newGeneratorOk(numbers)
 	printer := newPrinterAnySub(numbers)
 	var printerTask, generatorTask *Task
 	program.Work = func(ctx context.Context, work *Work) error {
 		generatorTask = work.Spawn("generatorAnySub", generator)
+		generatorTask.TerminationDeadline = 5 * time.Second
 		printerTask = work.Spawn("printAnySub", printer)
+		printerTask.TerminationDeadline = 5 * time.Second
 
 		work.Debugf("waiting before completing")
 		time.Sleep(time.Second)
