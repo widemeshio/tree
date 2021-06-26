@@ -157,6 +157,22 @@ func TestTerminateDeadline(t *testing.T) {
 	require.Equal(t, falseInt32, generator.completed, "generator should have not completed normally")
 }
 
+func TestWaitChildNoChildren(t *testing.T) {
+	logger := NewDevelopmentLogger()
+	program := NewTask("wait-no-children", logger)
+	program.TerminationDeadline = 7 * time.Second
+	program.Work = func(ctx context.Context, work *Work) error {
+		_, err := work.WaitChild()
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	ctx := context.Background()
+	err := program.Run(ctx)
+	require.Nil(t, err)
+}
+
 type generatorCrashing struct {
 	numbers chan int
 }
