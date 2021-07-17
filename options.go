@@ -4,6 +4,7 @@ package tree
 type Options struct {
 	// name of the task
 	Name string
+
 	// logger for internal task logs, defaults to nop logger
 	Logger Logger
 
@@ -19,10 +20,11 @@ func NewOptions(opts ...Option) Options {
 }
 
 // Apply applies the given options
-func (opts *Options) Apply(builders ...Option) {
+func (opts *Options) Apply(builders ...Option) *Options {
 	for _, builder := range builders {
 		builder.apply(opts)
 	}
+	return opts
 }
 
 // Copy returns a copy of the options

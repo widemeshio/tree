@@ -7,13 +7,12 @@ type Work struct {
 	owner *Task
 }
 
-// Spawn returns a child task running with the given name and handler.
+// Spawn returns a child task running with the given work
 func (w *Work) Spawn(handler WorkHandler, opts ...Option) *Task {
-	options := w.owner.options.Copy()
-	options.Apply(clearNonInheritables())
+	options := w.owner.childOptions()
+	options.Apply(WithWork(handler))
 	options.Apply(opts...)
 	newTask := NewTask(WithOptions(options))
-	newTask.Work = handler
 	w.owner.startSub(w.ctx, newTask)
 	return newTask
 }

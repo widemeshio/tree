@@ -168,3 +168,8 @@ func (task *Task) terminateChildren(ctx context.Context) {
 		sub.Terminate()
 	}
 }
+
+func (task *Task) childOptions() Options {
+	opts := task.options.Apply(clearNonInheritables())
+	return *opts
+}
