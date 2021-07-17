@@ -3,6 +3,7 @@ package tree
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -14,7 +15,7 @@ type Task struct {
 	name                       string
 	options                    Options
 	logger                     Logger
-	isTerminated               bool
+	isTerminated               int32
 	terminationSignalChan      chan struct{}
 	terminationSignalChanMutex sync.Mutex
 	terminatedChan             chan struct{}
@@ -103,14 +104,21 @@ func (task *Task) Terminate() {
 	logger := task.logger
 	task.terminationSignalChanMutex.Lock()
 	defer task.terminationSignalChanMutex.Unlock()
-	if task.isTerminated {
+	if task.IsTerminated() {
 		logger.Debugf("already terminated")
 		return
 	}
 	logger.Debugf("terminate closing")
-	task.isTerminated = true
+	atomic.StoreInt32(&task.isTerminated, isTerminated)
 	close(task.terminationSignalChan)
 	logger.Debugf("terminate closed")
+}
+
+const isTerminated = int32(1)
+
+// IsTerminated returns a value that indicates if the task Terminate function has been called by externals or the task itself after finishing running the work handler. Can be called from any goroutine.
+func (task *Task) IsTerminated() bool {
+	return atomic.LoadInt32(&task.isTerminated) == isTerminated
 }
 
 // Terminated returns a chan you can watch when the task has been terminated, meaning the task has completed the full run cycle.
@@ -132,7 +140,7 @@ func (task *Task) Name() string {
 func (task *Task) startSub(ctx context.Context, sub *Task) {
 	task.subsMutex.Lock()
 	defer task.subsMutex.Unlock()
-	if task.isTerminated {
+	if task.IsTerminated() {
 		panic("unable to start spawn when task already completed")
 	}
 	task.subs = append(task.subs, sub)

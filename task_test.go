@@ -186,6 +186,28 @@ func TestProductionTask(t *testing.T) {
 	require.True(t, hasRun)
 }
 
+func TestIsTerminatedItself(t *testing.T) {
+	program := NewTask(WithName("task-prod"), WithWorkFunc(func(ctx context.Context, work *Work) error {
+		return nil
+	}))
+	require.False(t, program.IsTerminated(), "should not be terminated before the task starts")
+	ctx := context.Background()
+	err := program.Run(ctx)
+	require.Nil(t, err)
+	require.True(t, program.IsTerminated(), "should be terminated after the task ends")
+}
+
+func TestIsTerminatedExternal(t *testing.T) {
+	program := NewTask(WithName("task-prod"), WithWorkFunc(func(ctx context.Context, work *Work) error {
+		return nil
+	}))
+	program.Terminate()
+	require.True(t, program.IsTerminated(), "should be terminated by external caller")
+	ctx := context.Background()
+	err := program.Run(ctx)
+	require.Nil(t, err)
+}
+
 type generatorCrashing struct {
 	numbers chan int
 }
