@@ -174,6 +174,16 @@ func TestWaitChildNoChildren(t *testing.T) {
 	require.Nil(t, err)
 }
 
+func TestProductionTask(t *testing.T) {
+	program := NewTask("task-prod")
+	program.Work = WorkHandlerFunc(func(ctx context.Context, work *Work) error {
+		return nil
+	})
+	ctx := context.Background()
+	err := program.Run(ctx)
+	require.Nil(t, err)
+}
+
 type generatorCrashing struct {
 	numbers chan int
 }
