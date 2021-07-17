@@ -25,13 +25,10 @@ type Task struct {
 	Work                       WorkHandler
 }
 
-// NewTask creates a new instance of task
-func NewTask(name string) *Task {
-	return NewTaskWithOptions(name, Options{})
-}
-
-// NewTaskWithOptions creates a new instance of task with the given logger
-func NewTaskWithOptions(name string, options Options) *Task {
+// NewTask creates a new instance of task with options
+func NewTask(opts ...Option) *Task {
+	options := NewOptions(opts...)
+	name := options.Name
 	return &Task{
 		name:                  name,
 		options:               options,

@@ -13,14 +13,14 @@ import (
 
 func TestWaitChildWithError(t *testing.T) {
 	logger := NewDevelopmentLogger()
-	program := NewTaskWithOptions("any with sub error", taskOptionsWithLogger(logger))
+	program := NewTask(WithName("any with sub error"), WithLogger(logger))
 	numbers := make(chan int)
 	generator := newGeneratorCrashing(numbers)
 	printer := newPrinterAnySub(numbers)
 	var printerTask *Task
 	program.Work = WorkHandlerFunc(func(ctx context.Context, work *Work) error {
-		work.Spawn("generatorAnySub", newTestWorkHandler(generator))
-		printerTask = work.Spawn("printAnySub", newTestWorkHandler(printer))
+		work.Spawn(newTestWorkHandler(generator), WithName("generatorAnySub"))
+		printerTask = work.Spawn(newTestWorkHandler(printer), WithName("printAnySub"))
 
 		_, err := work.WaitChild()
 		if err != nil {
@@ -37,14 +37,14 @@ func TestWaitChildWithError(t *testing.T) {
 
 func TestWaitChildSuccess(t *testing.T) {
 	logger := NewDevelopmentLogger()
-	program := NewTaskWithOptions("any-sub-success", taskOptionsWithLogger(logger))
+	program := NewTask(WithName("any-sub-success"), WithLogger(logger))
 	numbers := make(chan int)
 	generator := newGeneratorOk(numbers)
 	printer := newPrinterAnySub(numbers)
 	var printerTask, generatorTask *Task
 	program.Work = WorkHandlerFunc(func(ctx context.Context, work *Work) error {
-		generatorTask = work.Spawn("generatorAnySub", newTestWorkHandler(generator))
-		printerTask = work.Spawn("printAnySub", newTestWorkHandler(printer))
+		generatorTask = work.Spawn(newTestWorkHandler(generator), WithName("generatorAnySub"))
+		printerTask = work.Spawn(newTestWorkHandler(printer), WithName("printAnySub"))
 
 		_, err := work.WaitChild()
 		if err != nil {
@@ -64,16 +64,16 @@ func TestWaitChildSuccess(t *testing.T) {
 
 func TestCascadeCancel(t *testing.T) {
 	logger := NewDevelopmentLogger()
-	program := NewTaskWithOptions("cascade cancel", taskOptionsWithLogger(logger))
+	program := NewTask(WithName("cascade cancel"), WithLogger(logger))
 	program.TerminationDeadline = 15 * time.Second
 	numbers := make(chan int, 1000) // avoid deadlocks in this specific test
 	generator := newGeneratorOk(numbers)
 	printer := newPrinterAnySub(numbers)
 	var printerTask, generatorTask *Task
 	program.Work = WorkHandlerFunc(newTestWork(func(ctx context.Context, work *testWork) error {
-		generatorTask = work.Spawn("generatorAnySub", newTestWorkHandler(generator))
+		generatorTask = work.Spawn(newTestWorkHandler(generator), WithName("generatorAnySub"))
 		generatorTask.TerminationDeadline = 5 * time.Second
-		printerTask = work.Spawn("printAnySub", newTestWorkHandler(printer))
+		printerTask = work.Spawn(newTestWorkHandler(printer), WithName("printAnySub"))
 		printerTask.TerminationDeadline = 5 * time.Second
 
 		work.Debugf("waiting before completing")
@@ -93,15 +93,15 @@ func TestCascadeCancel(t *testing.T) {
 
 func TestTerminateContextDone(t *testing.T) {
 	logger := NewDevelopmentLogger()
-	program := NewTaskWithOptions("terminate-context-done", taskOptionsWithLogger(logger))
+	program := NewTask(WithName("terminate-context-done"), WithLogger(logger))
 	numbers := make(chan int, 1000) // avoid deadlocks in this specific test
 	generator := newGeneratorOk(numbers)
 	printer := newPrinterAnySub(numbers)
 	var printerTask, generatorTask *Task
 	cancelSuccessErr := fmt.Errorf("cancel err")
 	program.Work = WorkHandlerFunc(newTestWork(func(ctx context.Context, work *testWork) error {
-		generatorTask = work.Spawn("generator", newTestWorkHandler(generator))
-		printerTask = work.Spawn("print", newTestWorkHandler(printer))
+		generatorTask = work.Spawn(newTestWorkHandler(generator), WithName("generator"))
+		printerTask = work.Spawn(newTestWorkHandler(printer), WithName("print"))
 
 		work.Debugf("waiting before completing")
 		tick := time.NewTimer(20 * time.Second)
@@ -132,13 +132,13 @@ func TestTerminateContextDone(t *testing.T) {
 
 func TestTerminateDeadline(t *testing.T) {
 	logger := NewDevelopmentLogger()
-	program := NewTaskWithOptions("terminate-context-done", taskOptionsWithLogger(logger))
+	program := NewTask(WithName("terminate-context-done"), WithLogger(logger))
 	program.TerminationDeadline = 7 * time.Second
 	numbers := make(chan int)
 	generator := newGeneratorOk(numbers)
 	var generatorTask *Task
 	program.Work = WorkHandlerFunc(func(ctx context.Context, work *Work) error {
-		generatorTask = work.Spawn("generator", newTestWorkHandler(generator))
+		generatorTask = work.Spawn(newTestWorkHandler(generator), WithName("generator"))
 		generatorTask.TerminationDeadline = 3 * time.Second
 		<-generatorTask.Terminated()
 		return generatorTask.Err()
@@ -160,7 +160,7 @@ func TestTerminateDeadline(t *testing.T) {
 
 func TestWaitChildNoChildren(t *testing.T) {
 	logger := NewDevelopmentLogger()
-	program := NewTaskWithOptions("wait-no-children", taskOptionsWithLogger(logger))
+	program := NewTask(WithName("wait-no-children"), WithLogger(logger))
 	program.TerminationDeadline = 7 * time.Second
 	program.Work = WorkHandlerFunc(func(ctx context.Context, work *Work) error {
 		_, err := work.WaitChild()
@@ -175,7 +175,7 @@ func TestWaitChildNoChildren(t *testing.T) {
 }
 
 func TestProductionTask(t *testing.T) {
-	program := NewTask("task-prod")
+	program := NewTask(WithName("task-prod"))
 	program.Work = WorkHandlerFunc(func(ctx context.Context, work *Work) error {
 		return nil
 	})
@@ -287,7 +287,7 @@ type Program struct {
 
 func NewProgram(name string, logger Logger) *Program {
 	return &Program{
-		Task: NewTaskWithOptions(name, taskOptionsWithLogger(logger)),
+		Task: NewTask(WithName(name), WithLogger(logger)),
 	}
 }
 
@@ -327,10 +327,4 @@ type testWorkHandler struct {
 
 func (w *testWorkHandler) Work(ctx context.Context, work *Work) error {
 	return w.work(ctx, work)
-}
-
-func taskOptionsWithLogger(logger Logger) Options {
-	return Options{
-		Logger: logger,
-	}
 }
