@@ -13,7 +13,7 @@ import (
 
 func TestWaitChildWithError(t *testing.T) {
 	logger := NewDevelopmentLogger()
-	program := NewTask("any with sub error", logger)
+	program := NewTaskWithOptions("any with sub error", taskOptionsWithLogger(logger))
 	numbers := make(chan int)
 	generator := newGeneratorCrashing(numbers)
 	printer := newPrinterAnySub(numbers)
@@ -37,7 +37,7 @@ func TestWaitChildWithError(t *testing.T) {
 
 func TestWaitChildSuccess(t *testing.T) {
 	logger := NewDevelopmentLogger()
-	program := NewTask("any-sub-success", logger)
+	program := NewTaskWithOptions("any-sub-success", taskOptionsWithLogger(logger))
 	numbers := make(chan int)
 	generator := newGeneratorOk(numbers)
 	printer := newPrinterAnySub(numbers)
@@ -64,7 +64,7 @@ func TestWaitChildSuccess(t *testing.T) {
 
 func TestCascadeCancel(t *testing.T) {
 	logger := NewDevelopmentLogger()
-	program := NewTask("cascade cancel", logger)
+	program := NewTaskWithOptions("cascade cancel", taskOptionsWithLogger(logger))
 	program.TerminationDeadline = 15 * time.Second
 	numbers := make(chan int, 1000) // avoid deadlocks in this specific test
 	generator := newGeneratorOk(numbers)
@@ -93,7 +93,7 @@ func TestCascadeCancel(t *testing.T) {
 
 func TestTerminateContextDone(t *testing.T) {
 	logger := NewDevelopmentLogger()
-	program := NewTask("terminate-context-done", logger)
+	program := NewTaskWithOptions("terminate-context-done", taskOptionsWithLogger(logger))
 	numbers := make(chan int, 1000) // avoid deadlocks in this specific test
 	generator := newGeneratorOk(numbers)
 	printer := newPrinterAnySub(numbers)
@@ -132,7 +132,7 @@ func TestTerminateContextDone(t *testing.T) {
 
 func TestTerminateDeadline(t *testing.T) {
 	logger := NewDevelopmentLogger()
-	program := NewTask("terminate-context-done", logger)
+	program := NewTaskWithOptions("terminate-context-done", taskOptionsWithLogger(logger))
 	program.TerminationDeadline = 7 * time.Second
 	numbers := make(chan int)
 	generator := newGeneratorOk(numbers)
@@ -160,7 +160,7 @@ func TestTerminateDeadline(t *testing.T) {
 
 func TestWaitChildNoChildren(t *testing.T) {
 	logger := NewDevelopmentLogger()
-	program := NewTask("wait-no-children", logger)
+	program := NewTaskWithOptions("wait-no-children", taskOptionsWithLogger(logger))
 	program.TerminationDeadline = 7 * time.Second
 	program.Work = WorkHandlerFunc(func(ctx context.Context, work *Work) error {
 		_, err := work.WaitChild()
@@ -277,7 +277,7 @@ type Program struct {
 
 func NewProgram(name string, logger Logger) *Program {
 	return &Program{
-		Task: NewTask(name, logger),
+		Task: NewTaskWithOptions(name, taskOptionsWithLogger(logger)),
 	}
 }
 
@@ -298,7 +298,7 @@ func newTestWork(original func(ctx context.Context, work *testWork) error) func(
 	return func(ctx context.Context, work *Work) error {
 		return original(ctx, &testWork{
 			Work:   work,
-			Logger: work.Task().Logger(),
+			Logger: work.Task().logger,
 		})
 	}
 }
@@ -317,4 +317,10 @@ type testWorkHandler struct {
 
 func (w *testWorkHandler) Work(ctx context.Context, work *Work) error {
 	return w.work(ctx, work)
+}
+
+func taskOptionsWithLogger(logger Logger) Options {
+	return Options{
+		Logger: logger,
+	}
 }

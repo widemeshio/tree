@@ -12,23 +12,30 @@ const DefaultTerminationDeadline = 5 * time.Second
 // Task controls an asynchronous unit of work
 type Task struct {
 	name                       string
+	options                    Options
 	logger                     Logger
 	isTerminated               bool
 	terminationSignalChan      chan struct{}
 	terminationSignalChanMutex sync.Mutex
 	terminatedChan             chan struct{}
 	workErr                    error
-	Work                       WorkHandler
 	subs                       []*Task
 	subsMutex                  sync.Mutex
 	TerminationDeadline        time.Duration
+	Work                       WorkHandler
 }
 
 // NewTask creates a new instance of task
-func NewTask(name string, logger Logger) *Task {
+func NewTask(name string) *Task {
+	return NewTaskWithOptions(name, Options{})
+}
+
+// NewTaskWithOptions creates a new instance of task with the given logger
+func NewTaskWithOptions(name string, options Options) *Task {
 	return &Task{
 		name:                  name,
-		logger:                logger.Named(name),
+		options:               options,
+		logger:                options.GetLogger().Named(name),
 		terminationSignalChan: make(chan struct{}),
 		terminatedChan:        make(chan struct{}),
 		TerminationDeadline:   DefaultTerminationDeadline,
@@ -162,9 +169,4 @@ func (task *Task) terminateChildren(ctx context.Context) {
 		logger.Debugf("terminating %s", sub.Name())
 		sub.Terminate()
 	}
-}
-
-// Logger returns the internal logger interface
-func (task *Task) Logger() Logger {
-	return task.logger
 }

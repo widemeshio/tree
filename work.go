@@ -9,7 +9,9 @@ type Work struct {
 
 // Spawn returns a child task running with the given name and handler.
 func (w *Work) Spawn(name string, handler WorkHandler) *Task {
-	newTask := NewTask(name, w.owner.logger)
+	opts := w.owner.options
+	opts.Logger = w.owner.logger
+	newTask := NewTaskWithOptions(name, opts)
 	newTask.Work = handler
 	w.owner.startSub(w.ctx, newTask)
 	return newTask
