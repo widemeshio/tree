@@ -6,6 +6,9 @@ type Options struct {
 	Name string
 	// logger for internal task logs, defaults to nop logger
 	Logger Logger
+
+	// work to be performed by the task
+	Work WorkHandler
 }
 
 // NewOptions returns new Options with the given options
@@ -61,6 +64,18 @@ func WithLogger(logger Logger) Option {
 	})
 }
 
+// WithWork returns an Option that applies a WorkHandler to Options
+func WithWork(handler WorkHandler) Option {
+	return optionFunc(func(options *Options) {
+		options.Work = handler
+	})
+}
+
+// WithWorkFunc returns an Option that applies a WorkHandler to Options
+func WithWorkFunc(f WorkHandlerFunc) Option {
+	return WithWork(f)
+}
+
 // WithOptions returns an Option that replaces the given options to Options
 func WithOptions(newOptions Options) Option {
 	return optionFunc(func(options *Options) {
@@ -72,5 +87,6 @@ func WithOptions(newOptions Options) Option {
 func clearNonInheritables() Option {
 	return optionFunc(func(options *Options) {
 		options.Name = ""
+		options.Work = nil
 	})
 }

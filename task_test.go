@@ -175,13 +175,15 @@ func TestWaitChildNoChildren(t *testing.T) {
 }
 
 func TestProductionTask(t *testing.T) {
-	program := NewTask(WithName("task-prod"))
-	program.Work = WorkHandlerFunc(func(ctx context.Context, work *Work) error {
+	hasRun := false
+	program := NewTask(WithName("task-prod"), WithWorkFunc(func(ctx context.Context, work *Work) error {
+		hasRun = true
 		return nil
-	})
+	}))
 	ctx := context.Background()
 	err := program.Run(ctx)
 	require.Nil(t, err)
+	require.True(t, hasRun)
 }
 
 type generatorCrashing struct {

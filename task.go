@@ -36,6 +36,7 @@ func NewTask(opts ...Option) *Task {
 		terminationSignalChan: make(chan struct{}),
 		terminatedChan:        make(chan struct{}),
 		TerminationDeadline:   DefaultTerminationDeadline,
+		Work:                  options.Work,
 	}
 }
 

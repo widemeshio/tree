@@ -1,6 +1,7 @@
 package tree
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -20,10 +21,15 @@ func TestNewOptions(t *testing.T) {
 }
 
 func TestClearNonInheritablesOptions(t *testing.T) {
-	options := NewOptions(WithName("task-one"))
+	workFunc := func(ctx context.Context, work *Work) error {
+		return nil
+	}
+	options := NewOptions(WithName("task-one"), WithWorkFunc(workFunc))
 	require.Equal(t, "task-one", options.Name)
+	require.NotNil(t, options.Work)
 	options.Apply(clearNonInheritables())
 	require.Empty(t, options.Name, "name is not inheritable")
+	require.Empty(t, options.Work, "work handler is not inheritable")
 }
 
 func TestWithOptions(t *testing.T) {
