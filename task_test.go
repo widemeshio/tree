@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -184,6 +185,18 @@ func TestProductionTask(t *testing.T) {
 	err := program.Run(ctx)
 	require.Nil(t, err)
 	require.True(t, hasRun)
+}
+
+func TestStartTask(t *testing.T) {
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	program := NewTask(WithName("task-prod"), WithWorkFunc(func(ctx context.Context, work *Work) error {
+		wg.Done()
+		return nil
+	}))
+	ctx := context.Background()
+	program.Start(ctx)
+	wg.Wait()
 }
 
 func TestIsTerminatedItself(t *testing.T) {

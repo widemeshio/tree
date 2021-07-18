@@ -67,6 +67,12 @@ func (task *Task) work(ctx context.Context, cancelDeadlineStartSignal <-chan str
 	task.workErr = <-exit
 }
 
+// Start starts the task in its own goroutine
+func (task *Task) Start(ctx context.Context) {
+	go task.Run(ctx)
+}
+
+// Run runs the task blocking until completed
 func (task *Task) Run(ctx context.Context) error {
 	logger := task.logger
 	logger.Debugf("running")
