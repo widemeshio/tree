@@ -13,6 +13,11 @@ func (w *Work) Spawn(handler WorkHandler, opts ...Option) *Task {
 	options.Apply(WithWork(handler))
 	options.Apply(opts...)
 	newTask := NewTask(WithOptions(options))
+	return w.Attach(newTask)
+}
+
+// Attach adds a task as a child of the executing task
+func (w *Work) Attach(newTask *Task) *Task {
 	w.owner.startSub(w.ctx, newTask)
 	return newTask
 }
