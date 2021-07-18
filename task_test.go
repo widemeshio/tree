@@ -221,6 +221,20 @@ func TestIsTerminatedExternal(t *testing.T) {
 	require.Nil(t, err)
 }
 
+func TestDoubleTaskRun(t *testing.T) {
+	ctx := context.Background()
+	counter := int32(0)
+	program := NewTask(WithName("task-double-run"), WithWorkFunc(func(ctx context.Context, work *Work) error {
+		atomic.AddInt32(&counter, int32(1))
+		return nil
+	}))
+	err := program.Run(ctx)
+	require.Nil(t, err)
+	err = program.Run(ctx)
+	require.Equal(t, int32(1), counter, "should have only executed once")
+	require.ErrorIs(t, err, &ErrTaskAlreadyUsed{}, "error when trying to run a task twice")
+}
+
 type generatorCrashing struct {
 	numbers chan int
 }
@@ -315,7 +329,6 @@ func (pri *printAnySub) Work(ctx context.Context, work *testWork) error {
 	}
 }
 
-var trueInt32 = int32(1)
 var falseInt32 = int32(0)
 
 type Program struct {

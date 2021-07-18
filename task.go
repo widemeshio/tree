@@ -15,6 +15,7 @@ type Task struct {
 	name                       string
 	options                    Options
 	logger                     Logger
+	isUsed                     int32
 	isTerminated               int32
 	terminationSignalChan      chan struct{}
 	terminationSignalChanMutex sync.Mutex
@@ -72,9 +73,24 @@ func (task *Task) Start(ctx context.Context) {
 	go task.Run(ctx)
 }
 
-// Run runs the task blocking until completed
+func (task *Task) validateUse() error {
+	if !task.IsUsed() {
+		return nil
+	}
+	return &ErrTaskAlreadyUsed{
+		TaskName: task.Name(),
+		Message:  "task has already been used",
+	}
+}
+
+// Run runs the task blocking until completed. A task can only run once, the second time it returns ErrTaskAlreadyUsed.
 func (task *Task) Run(ctx context.Context) error {
 	logger := task.logger
+	if err := task.validateUse(); err != nil {
+		return err
+	}
+	atomic.StoreInt32(&task.isUsed, trueInt32)
+
 	logger.Debugf("running")
 	cancelDeadlineStartSignal := make(chan struct{}, 1)
 	ctx, cancel := context.WithCancel(ctx)
@@ -115,16 +131,21 @@ func (task *Task) Terminate() {
 		return
 	}
 	logger.Debugf("terminate closing")
-	atomic.StoreInt32(&task.isTerminated, isTerminated)
+	atomic.StoreInt32(&task.isTerminated, trueInt32)
 	close(task.terminationSignalChan)
 	logger.Debugf("terminate closed")
 }
 
-const isTerminated = int32(1)
+const trueInt32 = int32(1)
+
+// IsUsed indicates whether the given task has run at some point
+func (task *Task) IsUsed() bool {
+	return atomic.LoadInt32(&task.isUsed) == trueInt32
+}
 
 // IsTerminated returns a value that indicates if the task Terminate function has been called by externals or the task itself after finishing running the work handler. Can be called from any goroutine.
 func (task *Task) IsTerminated() bool {
-	return atomic.LoadInt32(&task.isTerminated) == isTerminated
+	return atomic.LoadInt32(&task.isTerminated) == trueInt32
 }
 
 // Terminated returns a chan you can watch when the task has been terminated, meaning the task has completed the full run cycle.
@@ -143,14 +164,10 @@ func (task *Task) Name() string {
 	return task.name
 }
 
-func (task *Task) startSub(ctx context.Context, sub *Task) {
+func (task *Task) attach(ctx context.Context, sub *Task) {
 	task.subsMutex.Lock()
 	defer task.subsMutex.Unlock()
-	if task.IsTerminated() {
-		panic("unable to start spawn when task already completed")
-	}
 	task.subs = append(task.subs, sub)
-	go sub.Run(ctx)
 }
 
 func (task *Task) awaitAnySub(ctx context.Context) (*Task, error) {
